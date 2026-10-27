@@ -1,0 +1,154 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="robots" content="noindex,nofollow">
+<title>Admin</title>
+<style>
+  :root{--red:#e8333a;--red2:#d42128;--bg:#14141c;--card:#181821;--field:#22222d;--line:rgba(255,255,255,.09);--ink:#f2f2f5;--muted:#9a9aa8;--ok:#2ecc71;--warn:#f5b042}
+  *{box-sizing:border-box}
+  body{margin:0;min-height:100vh;color:var(--ink);background:radial-gradient(700px 400px at 50% 0,#2a1217,var(--bg) 70%),var(--bg);font:15px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;padding:20px}
+  .wrap{max-width:900px;margin:0 auto}
+  h1{margin:0 0 4px;color:var(--red);font-size:1.5rem}
+  .sub{color:var(--muted);margin:0 0 18px;font-size:.9rem}
+  .card{background:var(--card);border:1px solid rgba(232,51,58,.3);border-radius:18px;padding:22px;box-shadow:0 20px 50px rgba(0,0,0,.45)}
+  input{width:100%;font:inherit;padding:12px 14px;border-radius:10px;border:1px solid var(--line);background:var(--field);color:var(--ink)}
+  input:focus{outline:2px solid var(--red);border-color:transparent}
+  button{font:inherit;font-weight:600;padding:9px 14px;border:0;border-radius:10px;background:linear-gradient(90deg,#f0474d,var(--red2));color:#fff;cursor:pointer}
+  button:hover{filter:brightness(1.08)} button:disabled{opacity:.6}
+  button.ghost{background:transparent;border:1px solid var(--line);color:var(--muted)}
+  button.danger{background:transparent;border:1px solid rgba(232,51,58,.5);color:#ff8b92}
+  #login{max-width:360px;margin:12vh auto 0}
+  #login button{width:100%;margin-top:12px;padding:12px}
+  .err{background:rgba(232,51,58,.12);border:1px solid rgba(232,51,58,.4);color:#ffb3b6;padding:10px 12px;border-radius:10px;margin:12px 0 0;font-size:.88rem}
+  .bar{display:flex;gap:10px;flex-wrap:wrap;align-items:center;justify-content:space-between;margin-bottom:16px}
+  .stats{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:16px}
+  .stat{background:var(--field);border:1px solid var(--line);border-radius:12px;padding:10px 14px;min-width:110px}
+  .stat b{display:block;font-size:1.3rem}.stat span{color:var(--muted);font-size:.8rem}
+  .row{background:var(--field);border:1px solid var(--line);border-radius:14px;padding:14px;margin-bottom:10px}
+  .head{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap;align-items:center}
+  .name{font-weight:700} .meta{color:var(--muted);font-size:.85rem;margin-top:2px;word-break:break-all}
+  .badge{font-size:.78rem;font-weight:700;padding:3px 10px;border-radius:99px;border:1px solid var(--line)}
+  .b-connected{color:var(--ok);border-color:rgba(46,204,113,.5)} .b-pairing,.b-reconnecting{color:var(--warn);border-color:rgba(245,176,66,.5)}
+  .b-error,.b-crashed,.b-logged_out{color:#ff8b92;border-color:rgba(232,51,58,.5)}
+  .acts{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+  .acts button{padding:7px 11px;font-size:.84rem}
+  .empty{text-align:center;color:var(--muted);padding:24px}
+  [hidden]{display:none!important}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div id="login" class="card">
+    <h1>Admin</h1>
+    <p class="sub">Entre le mot de passe administrateur.</p>
+    <form id="lf">
+      <input id="pw" type="password" autocomplete="current-password" placeholder="Mot de passe" required>
+      <button>Se connecter</button>
+    </form>
+    <p id="lerr" class="err" hidden></p>
+  </div>
+
+  <div id="panel" hidden>
+    <div class="bar">
+      <div><h1>Admin</h1><p class="sub" style="margin:0">Instances du bot</p></div>
+      <div style="display:flex;gap:8px">
+        <button class="ghost" id="refresh">Actualiser</button>
+        <button class="danger" id="killall">Tout arrêter</button>
+        <button class="ghost" id="logout">Quitter</button>
+      </div>
+    </div>
+    <div class="stats" id="stats"></div>
+    <div id="list"></div>
+  </div>
+</div>
+
+<script>
+(function(){
+  var $ = function(id){ return document.getElementById(id); };
+  var PW = ""; try { PW = sessionStorage.getItem("adm") || ""; } catch(e){}
+  var timer = null;
+
+  function api(method, path, body){
+    return fetch(path, {
+      method: method,
+      headers: { "Content-Type":"application/json", "X-Admin-Pass": PW },
+      body: body ? JSON.stringify(body) : undefined
+    }).then(function(r){ return r.json().catch(function(){ return {ok:false,error:"Réponse invalide."}; }).then(function(j){ j._status = r.status; return j; }); });
+  }
+
+  function el(tag, cls, text){ var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
+  var LABELS = { connected:"Connecté", pairing:"En attente du code", reconnecting:"Reconnexion", stopped:"Arrêté", error:"Erreur", crashed:"Plantée", logged_out:"Déconnecté" };
+  function fmt(t){ return t ? new Date(t).toLocaleString("fr-FR") : "?"; }
+
+  function render(d){
+    var st = $("stats"); st.textContent = "";
+    [[d.stats.total, "Instances"], [d.stats.running + (d.stats.max ? " / " + d.stats.max : ""), "Processus actifs"],
+     [d.stats.byStatus.connected || 0, "Connectées"]].forEach(function(s){
+      var b = el("div","stat"); b.appendChild(el("b",null,s[0])); b.appendChild(el("span",null,s[1])); st.appendChild(b);
+    });
+    var list = $("list"); list.textContent = "";
+    if (!d.instances.length) { list.appendChild(el("div","empty","Aucune instance.")); return; }
+    d.instances.sort(function(a,b){ return (b.updatedAt||0) - (a.updatedAt||0); }).forEach(function(i){
+      var row = el("div","row"), head = el("div","head"), left = el("div");
+      left.appendChild(el("div","name", i.label));
+      left.appendChild(el("div","meta", "📱 " + (i.phone || "?") + " · " + i.source + " · maj " + fmt(i.updatedAt)));
+      left.appendChild(el("div","meta", "id : " + i.id));
+      head.appendChild(left);
+      head.appendChild(el("span","badge b-" + i.status, (i.active ? "● " : "") + (LABELS[i.status] || i.status)));
+      row.appendChild(head);
+
+      var acts = el("div","acts");
+      function btn(text, cls, fn){ var b = el("button", cls, text); b.onclick = fn; acts.appendChild(b); }
+      btn("Renommer","ghost", function(){
+        var n = prompt("Nouveau nom :", i.label); if (n === null) return;
+        api("POST","/api/admin/rename",{id:i.id,label:n}).then(load);
+      });
+      if (i.active) btn("Arrêter","danger", function(){
+        if (confirm("Arrêter l'instance de " + i.label + " ? (ses données sont conservées)")) api("POST","/api/admin/kill",{id:i.id}).then(load);
+      });
+      btn("Arrêter + effacer","danger", function(){
+        if (confirm("Arrêter ET effacer la session de " + i.label + " ? Cette personne devra se reconnecter.")) api("POST","/api/admin/kill",{id:i.id,wipe:true}).then(load);
+      });
+      btn("Supprimer","danger", function(){
+        if (confirm("Supprimer complètement " + i.label + " de la liste (données comprises) ?")) api("POST","/api/admin/kill",{id:i.id,remove:true}).then(function(){ setTimeout(load,2000); });
+      });
+      row.appendChild(acts);
+      list.appendChild(row);
+    });
+  }
+
+  function load(){
+    api("GET","/api/admin/instances").then(function(d){
+      if (d._status === 401 || d._status === 429) { logout(d.error); return; }
+      if (!d.ok) return;
+      $("login").hidden = true; $("panel").hidden = false;
+      render(d);
+      if (!timer) timer = setInterval(load, 8000);
+    }).catch(function(){});
+  }
+
+  function logout(msg){
+    PW = ""; try { sessionStorage.removeItem("adm"); } catch(e){}
+    clearInterval(timer); timer = null;
+    $("panel").hidden = true; $("login").hidden = false;
+    $("lerr").textContent = msg || ""; $("lerr").hidden = !msg;
+  }
+
+  $("lf").addEventListener("submit", function(e){
+    e.preventDefault(); PW = $("pw").value; $("pw").value = "";
+    try { sessionStorage.setItem("adm", PW); } catch(e){}
+    $("lerr").hidden = true; load();
+  });
+  $("refresh").onclick = load;
+  $("logout").onclick = function(){ logout(""); };
+  $("killall").onclick = function(){
+    if (confirm("Arrêter TOUTES les instances actives ? (données conservées)")) api("POST","/api/admin/killall",{}).then(function(){ setTimeout(load,1500); });
+  };
+
+  if (PW) load();
+})();
+</script>
+</body>
+</html>

@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>__BOT_NAME__ - WhatsApp Pair</title>
+<style>
+  :root{--bg1:#0b1f17;--bg2:#050b08;--card:#101c16;--line:#21382c;--ink:#eaf6ee;--muted:#8fa89b;--green:#25d366;--green-d:#1ebe5a;--err:#ff8b80;--errbg:#3a1a17;--warn:#f5b042}
+  *{box-sizing:border-box}
+  body{margin:0;min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;padding:20px;
+    background:radial-gradient(1000px 600px at 50% -10%,var(--bg1),var(--bg2));color:var(--ink);
+    font:16px/1.55 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+  .box{width:100%;max-width:440px;background:var(--card);border:1px solid var(--line);border-radius:20px;padding:30px 24px;
+    box-shadow:0 20px 60px rgba(0,0,0,.45);text-align:center}
+  h1{margin:0;font-size:2rem;letter-spacing:.04em;color:var(--green)}
+  .tag{margin:2px 0 18px;color:var(--muted)}
+  .intro{color:var(--muted);font-size:.92rem;margin:0 0 14px}
+  .tabs{display:flex;gap:8px;margin-bottom:14px}
+  .tabs span{flex:1;padding:9px;border-radius:10px;background:#0c1612;border:1px solid var(--line);font-weight:700;font-size:.85rem;color:var(--green)}
+  details{text-align:left;background:#0c1612;border:1px solid var(--line);border-radius:12px;padding:10px 14px;margin-bottom:18px}
+  summary{cursor:pointer;font-weight:600;color:var(--green);list-style:none;text-align:center}
+  summary::-webkit-details-marker{display:none}
+  details ol{margin:10px 0 2px;padding-left:20px;color:var(--muted);font-size:.9rem}
+  form{text-align:left}
+  label{display:block;font-weight:600;font-size:.92rem;margin-bottom:8px}
+  input{width:100%;font:inherit;padding:13px 14px;border-radius:12px;border:1px solid var(--line);background:#0c1612;color:var(--ink)}
+  input:focus{outline:2px solid var(--green);border-color:transparent}
+  button{width:100%;font:inherit;font-weight:700;padding:13px;border:0;border-radius:12px;background:var(--green);color:#04210f;cursor:pointer;margin-top:14px}
+  button:hover{background:var(--green-d)} button:disabled{opacity:.6;cursor:wait}
+  button.ghost{background:transparent;color:var(--muted);border:1px solid var(--line)}
+  .out{margin-top:18px;min-height:92px;border:1px dashed var(--line);border-radius:14px;padding:16px;display:flex;flex-direction:column;justify-content:center;align-items:center;color:var(--muted)}
+  .code{font:800 2.2rem/1 ui-monospace,Menlo,Consolas,monospace;letter-spacing:.2em;color:var(--green);user-select:all}
+  .small{font-size:.85rem;margin-top:8px}
+  .timer{color:var(--warn)}
+  .err{background:var(--errbg);color:var(--err);padding:10px 12px;border-radius:10px;margin:14px 0 0;text-align:left;font-size:.92rem}
+  .out button{margin-top:12px}
+  footer{margin-top:22px;color:var(--muted);font-size:.82rem;text-align:center}
+  [hidden]{display:none!important}
+</style>
+</head>
+<body>
+<div class="box">
+  <h1>__BOT_NAME__</h1>
+  <p class="tag">Connecte ton compte WhatsApp</p>
+
+  <p class="intro">Entre ton numéro WhatsApp, clique sur « Générer le code » et obtiens ton code d'appairage à 8 caractères.</p>
+
+  <details>
+    <summary>Afficher les instructions</summary>
+    <ol>
+      <li>Ouvre WhatsApp sur ton téléphone.</li>
+      <li>Android : menu ⋮ (en haut à droite) puis <b>Appareils connectés</b>.</li>
+      <li>iPhone : <b>Réglages</b> (en bas à droite) puis <b>Appareils connectés</b>.</li>
+      <li>Touche <b>Connecter un appareil</b>, puis <b>« Connecter avec le numéro de téléphone »</b>.</li>
+      <li>Entre le code affiché sur cette page.</li>
+    </ol>
+  </details>
+
+  <form id="form">
+    <label for="phone">Entre ton numéro WhatsApp avec l'indicatif du pays</label>
+    <input id="phone" inputmode="numeric" autocomplete="tel" placeholder="2250700000000" required>
+    <button id="go">Générer le code</button>
+  </form>
+
+  <p id="err" class="err" hidden></p>
+
+  <div class="out" id="out">
+    <span id="placeholder">Ton code apparaîtra ici</span>
+
+    <div id="codeView" hidden>
+      <div class="code" id="code">········</div>
+      <div class="small timer" id="timer"></div>
+      <button id="copy" type="button">Copier le code</button>
+      <button class="ghost" id="cancel" type="button">Annuler</button>
+    </div>
+
+    <div id="waitView" hidden>⏳ Génération du code…</div>
+
+    <div id="doneView" hidden>
+      <div style="font-size:2.4rem">✅</div>
+      <b>Bot connecté !</b>
+      <div class="small" id="doneInfo"></div>
+      <div class="small">Écris <b>.menu</b> sur WhatsApp pour voir les commandes.</div>
+      <button class="ghost" id="stop" type="button">Arrêter mon bot</button>
+    </div>
+  </div>
+</div>
+
+<footer>© 2026 __BOT_NAME__ · Non affilié à WhatsApp / Meta</footer>
+
+<script>
+(function(){
+  // Quand la page est servie par le serveur d'appairage, API = même origine.
+  // Si tu l'héberges ailleurs, mets l'adresse du serveur ici (sans / final) :
+  var API = "";
+
+  function getSid(){
+    var sid = null;
+    try { sid = localStorage.getItem("ariel_sid"); } catch(e){}
+    if (!sid || !/^[a-f0-9]{48}$/.test(sid)) {
+      var a = new Uint8Array(24); crypto.getRandomValues(a);
+      sid = Array.prototype.map.call(a, function(b){ return ("0"+b.toString(16)).slice(-2); }).join("");
+      try { localStorage.setItem("ariel_sid", sid); } catch(e){}
+    }
+    return sid;
+  }
+  var SID = getSid();
+
+  var $ = function(id){ return document.getElementById(id); };
+  var views = { none:$("placeholder"), code:$("codeView"), wait:$("waitView"), done:$("doneView") };
+  function show(name){ for (var k in views) views[k].hidden = (k !== name); }
+  function showErr(msg){ $("err").textContent = msg || ""; $("err").hidden = !msg; }
+
+  function api(method, path, body){
+    return fetch(API + path, {
+      method: method,
+      headers: { "Content-Type":"application/json", "X-Sid": SID },
+      body: body ? JSON.stringify(body) : undefined
+    }).then(function(r){ return r.json().catch(function(){ return {ok:false,error:"Réponse invalide."}; }); });
+  }
+
+  var poll = null, codeSince = 0, lastCode = null;
+  function startPolling(){ if (!poll) poll = setInterval(refresh, 2000); refresh(); }
+  function stopPolling(){ clearInterval(poll); poll = null; }
+
+  function idle(msg){
+    stopPolling(); lastCode = null; show("none"); showErr(msg || "");
+    $("go").disabled = false; $("form").hidden = false;
+  }
+
+  function refresh(){
+    api("GET", "/api/status").then(function(s){
+      if (!s.ok) { showErr(s.error); return; }
+      if (s.status === "connected" && s.active) {
+        stopPolling(); showErr(""); $("form").hidden = true;
+        $("doneInfo").textContent = [s.name, s.phone].filter(Boolean).join(" · ");
+        show("done");
+      } else if (s.active && (s.status === "pairing" || s.status === "reconnecting")) {
+        $("form").hidden = true; showErr("");
+        if (s.code) {
+          if (s.code !== lastCode) { lastCode = s.code; codeSince = Date.now(); }
+          $("code").textContent = s.code; show("code");
+        } else show("wait");
+      } else {
+        if (s.phone && !$("phone").value) $("phone").value = s.phone;
+        idle(s.notice && s.status !== "connected" ? s.notice : "");
+      }
+    }).catch(function(){ showErr("Serveur injoignable."); });
+  }
+
+  setInterval(function(){
+    if ($("codeView").hidden || !codeSince) return;
+    var left = 60 - Math.floor((Date.now() - codeSince) / 1000);
+    $("timer").textContent = left > 0 ? "Expire dans ~" + left + " s" : "Peut-être expiré : un nouveau code arrive automatiquement";
+  }, 1000);
+
+  $("form").addEventListener("submit", function(e){
+    e.preventDefault(); showErr("");
+    $("go").disabled = true;
+    api("POST", "/api/pair", { phone: $("phone").value.replace(/\D/g, "") }).then(function(r){
+      if (!r.ok) { showErr(r.error || "Erreur."); $("go").disabled = false; return; }
+      show("wait"); startPolling();
+    }).catch(function(){ showErr("Serveur injoignable."); $("go").disabled = false; });
+  });
+
+  $("copy").addEventListener("click", function(){
+    var b = $("copy"), t = $("code").textContent;
+    (navigator.clipboard ? navigator.clipboard.writeText(t) : Promise.reject()).then(function(){
+      b.textContent = "Code copié !"; setTimeout(function(){ b.textContent = "Copier le code"; }, 1500);
+    }).catch(function(){
+      var r = document.createRange(); r.selectNodeContents($("code"));
+      var s = getSelection(); s.removeAllRanges(); s.addRange(r);
+    });
+  });
+
+  function stop(){ api("POST", "/api/stop").then(function(){ idle(""); }); }
+  $("cancel").addEventListener("click", stop);
+  $("stop").addEventListener("click", stop);
+
+  startPolling(); // reprend là où on s'était arrêté si on recharge la page
+})();
+</script>
+</body>
+</html>
